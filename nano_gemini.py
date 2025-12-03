@@ -13,6 +13,7 @@ def tensor2pil(image_tensor):
     """Convert ComfyUI tensor (B=1, H, W, C) to PIL Image (RGB)"""
     if image_tensor is None or image_tensor.shape[0] == 0:
         return None
+    # Take the first image in the batch if a batch is passed to a single socket
     i = 255. * image_tensor[0].cpu().numpy()  # (H, W, C)
     image = np.clip(i, 0, 255).astype(np.uint8)
     
@@ -47,7 +48,6 @@ class NanoBEditGemini:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "images": ("IMAGE",),  # Accepts a batch of images (1 to 16)
                 "prompt": ("STRING", {"default": "Edit the image according to this prompt.", "multiline": True}),
                 "model": ([
                     "gemini-3-pro-image-preview", # Nano Banana Pro
@@ -60,6 +60,13 @@ class NanoBEditGemini:
                 "num_images": ("INT", {"default": 1, "min": 1, "max": 4, "step": 1}),
                 "safety_filter": (["block_none", "block_few", "block_some", "block_most"], {"default": "block_none"}),
             },
+            "optional": {
+                "image1": ("IMAGE",),
+                "image2": ("IMAGE",),
+                "image3": ("IMAGE",),
+                "image4": ("IMAGE",),
+                "image5": ("IMAGE",),
+            }
         }
 
     RETURN_TYPES = ("IMAGE",)
@@ -68,25 +75,25 @@ class NanoBEditGemini:
     CATEGORY = "NanoGemini"
     OUTPUT_NODE = True
 
-    def process(self, images, prompt, model, gemini_api_key, aspect_ratio="1:1", num_images=1, safety_filter="block_none"):
+    def process(self, prompt, model, gemini_api_key, aspect_ratio="1:1", num_images=1, safety_filter="block_none",
+                image1=None, image2=None, image3=None, image4=None, image5=None):
         if not gemini_api_key or gemini_api_key.strip() == "":
             raise ValueError("Please provide a valid Google Gemini API Key.")
 
         # 1. Prepare Input Images
-        # 'images' is a tensor of shape [B, H, W, C]. We convert each to base64.
+        # Collect all non-None images from the 5 inputs
+        input_tensors = [img for img in [image1, image2, image3, image4, image5] if img is not None]
+        
+        if not input_tensors:
+             raise ValueError("At least one image input (image1 - image5) is required.")
+
         input_parts = []
         
         # Add the text prompt first
         input_parts.append({"text": prompt})
 
-        # Process input image batch
-        batch_size = images.shape[0]
-        if batch_size > 16:
-             print(f"Warning: Gemini API usually supports up to 16 input images. Truncating {batch_size} to 16.")
-             images = images[:16]
-
-        for i in range(images.shape[0]):
-            img_tensor = images[i:i+1] # Slice to keep dims for helper
+        # Process input images
+        for img_tensor in input_tensors:
             pil_img = tensor2pil(img_tensor)
             if pil_img:
                 buffer = BytesIO()
