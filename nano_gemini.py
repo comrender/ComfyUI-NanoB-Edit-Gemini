@@ -1,3 +1,4 @@
+import os
 import torch
 import requests
 import base64
@@ -81,8 +82,13 @@ class NanoBEditGemini:
 
     def process(self, prompt, model, gemini_api_key, aspect_ratio="1:1", resolution="1K", num_images=1, safety_filter="block_none", debug_payload=False,
                 image1=None, image2=None, image3=None, image4=None, image5=None, image6_14=None):
+        
+        # Check environment variable if UI field is empty
         if not gemini_api_key or gemini_api_key.strip() == "":
-            raise ValueError("Please provide a valid Google Gemini API Key.")
+            gemini_api_key = os.environ.get("GEMINI_API_KEY")
+
+        if not gemini_api_key or gemini_api_key.strip() == "":
+            raise ValueError("Please provide a valid Google Gemini API Key via the UI or the GEMINI_API_KEY environment variable.")
 
         # 1. Prepare Input Images
         input_tensors = []
